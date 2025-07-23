@@ -26,6 +26,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+      ## Write .env file from secret
+      #- name: Write .env file from secret
+      #  run: echo "${{ secrets.ENV_FILE }}" > .env  
       # Determinar el entorno y navegador basado en el trigger
       - name: Set test parameters
         id: params
@@ -71,6 +74,16 @@ jobs:
           allure_results: allure-results
           gh_pages: allure
           subfolder: sanity
+      - name: Get latest Allure execution folder in sanity
+        id: latest_allure_folder
+        if: ${{ success() }}
+        run: |
+          # Find the highest-numbered folder in allure/sanity
+          LATEST_FOLDER=$(ls -1d allure/sanity/*/ | grep -E 'allure/sanity/[0-9]+/' | sort -V | tail -n 1)
+          # Remove trailing slash
+          LATEST_FOLDER_NAME=$(basename "$LATEST_FOLDER")
+          echo "Latest folder: $LATEST_FOLDER_NAME"
+          echo "latest_folder_name=$LATEST_FOLDER_NAME" >> $GITHUB_OUTPUT
       - name: Deploy report to Github Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
@@ -121,8 +134,9 @@ jobs:
             echo "Passed tests: $PASSED"
             echo "Failed tests: $FAILED"
 
-    # Reportar los resultados al orquestador si este job fue invocado remotamente
-    # Continuará ante fallos salvo que el job se haya cancelado
+    # Reportar los resultados al orquestador si este job fue invocado remotamente 
+    # continuará ante fallos salvo que se haya cancelado 
+
       - name: Report results to orchestrator
         if: ${{ env.CALLER_RUN_ID != 'null' }} && ${{ !cancelled() }}
         run: |
@@ -137,7 +151,7 @@ jobs:
               "passed": "${{ env.CYPRESS_PASSED_TESTS || 0 }}",
               "failed": "${{ env.CYPRESS_FAILED_TESTS || 0 }}"
             },
-            "allure_report_url": "https://slingr-stack.github.io/cypress-delta9/sanity"
+            "allure_report_url": "https://slingr-stack.github.io/cypress-delta9/sanity/${{ steps.latest_allure_folder.outputs.latest_folder_name }}"
           }
           EOF
           
