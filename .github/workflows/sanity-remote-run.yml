@@ -76,7 +76,7 @@ jobs:
           subfolder: sanity
       - name: Get latest Allure execution folder in sanity
         id: latest_allure_folder
-        if: ${{ success() }}
+        if: always()
         run: |
           # Find the highest-numbered folder in allure/sanity
           LATEST_FOLDER=$(ls -1d allure/sanity/*/ | grep -E 'allure/sanity/[0-9]+/' | sort -V | tail -n 1)
@@ -94,45 +94,36 @@ jobs:
       - name: Store Cypress results
         if: always()
         run: |
-            # Find all result files
-            RESULT_FILES=$(find allure-results -name "*-result.json")
-            
-            if [ -z "$RESULT_FILES" ]; then
-                echo "Couldn't find any result files. Setting values to 0."
-                echo "CYPRESS_TOTAL_TESTS=0" >> $GITHUB_ENV
-                echo "CYPRESS_PASSED_TESTS=0" >> $GITHUB_ENV
-                echo "CYPRESS_FAILED_TESTS=0" >> $GITHUB_ENV
-            else
-                # Initialize counters
-                TOTAL=0
-                PASSED=0
-                FAILED=0
-                
-                # Process each file
-                for file in $RESULT_FILES; do
-                # Increment total
-                TOTAL=$((TOTAL + 1))
-                
-                # Extract top-level status field using jq
-                TOP_STATUS=$(jq -r '.status' "$file")
-                
-                # Check if test passed
-                if [ "$TOP_STATUS" == "passed" ]; then
-                    PASSED=$((PASSED + 1))
-                else
-                    FAILED=$((FAILED + 1))
-                fi
-                done
-                
-                # Set environment variables
-                echo "CYPRESS_TOTAL_TESTS=$TOTAL" >> $GITHUB_ENV
-                echo "CYPRESS_PASSED_TESTS=$PASSED" >> $GITHUB_ENV
-                echo "CYPRESS_FAILED_TESTS=$FAILED" >> $GITHUB_ENV
-            fi
-            # Display values for verification
+          # Find all result files
+          RESULT_FILES=$(find allure-results -name "*-result.json")
+          if [ -z "$RESULT_FILES" ]; then
+            echo "Couldn't find any result files. Setting values to 0."
+            echo "CYPRESS_TOTAL_TESTS=0" >> $GITHUB_ENV
+            echo "CYPRESS_PASSED_TESTS=0" >> $GITHUB_ENV
+            echo "CYPRESS_FAILED_TESTS=0" >> $GITHUB_ENV
+          else
+            jq -s '
+              group_by(.historyId) | 
+              map(max_by(.start)) | 
+              {
+                total: length,
+                passed: map(select(.status == "passed")) | length,
+                failed: map(select(.status != "passed")) | length
+              }
+            ' $RESULT_FILES > summary.json
+
+            TOTAL=$(jq '.total' summary.json)
+            PASSED=$(jq '.passed' summary.json)
+            FAILED=$(jq '.failed' summary.json)
+
+            echo "CYPRESS_TOTAL_TESTS=$TOTAL" >> $GITHUB_ENV
+            echo "CYPRESS_PASSED_TESTS=$PASSED" >> $GITHUB_ENV
+            echo "CYPRESS_FAILED_TESTS=$FAILED" >> $GITHUB_ENV
+
             echo "Total tests: $TOTAL"
             echo "Passed tests: $PASSED"
             echo "Failed tests: $FAILED"
+          fi
 
     # Reportar los resultados al orquestador si este job fue invocado remotamente 
     # continuará ante fallos salvo que se haya cancelado 
