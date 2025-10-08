@@ -1,0 +1,11 @@
+CypressError: `cy.visit()` failed trying to load:
+
+https://delta9.slingrs.io/staging/runtime/login
+
+The response we received from your web server was:
+
+  > 503: Service Unavailable
+
+This was considered a failure because the status code was not `2xx`.
+
+If you do not want status codes to cause failures pass the option: `failOnStatusCode: false`
